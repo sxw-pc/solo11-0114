@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "gridreproject"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.5", "rasterio>=1.5"]
+[tool.setuptools.packages.find]
+include = ["gridreproject*"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
