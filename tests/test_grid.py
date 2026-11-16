@@ -74,3 +74,18 @@ def test_report_has_cell_coverage_and_audit(tmp_path):
     obj=json.loads(engine.report(tmp_path/'db',rid,tmp_path/'r.json').read_text(encoding='utf-8'))
     assert len(obj['cells'])==4 and obj['audit']==[]
     assert all('coverage' in cell for cell in obj['cells'])
+
+def test_extensive_audit_catches_wrong_total_even_with_updated_hash(tmp_path):
+    rid=engine.run(tmp_path/'db',source(tmp_path),cfg(kind='extensive',method='area'),tmp_path/'out.tif')
+    with rasterio.open(tmp_path/'out.tif') as old:
+        profile=old.profile;data=old.read(1)
+    data[0,0]+=5
+    with rasterio.open(tmp_path/'out.tif','w',**profile) as changed:changed.write(data,1)
+    from gridreproject.store import connect
+    import hashlib
+    db=connect(tmp_path/'db')
+    with db:db.execute('UPDATE output SET hash=? WHERE run_id=?',(hashlib.sha256((tmp_path/'out.tif').read_bytes()).hexdigest(),rid))
+    assert 'total_mismatch' in engine.audit(tmp_path/'db',rid)
+
+def test_unknown_run_report_rejected(tmp_path):
+    with pytest.raises(ValueError,match='unknown_run'):engine.report(tmp_path/'db',999,tmp_path/'r.json')
