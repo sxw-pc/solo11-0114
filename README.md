@@ -15,3 +15,7 @@
 `zone-register` 冻结目标格分区与阈值，`zone-evaluate` 根据持久化格值及覆盖证据裁定正常、超限或证据不足。`release` 将分区结论和运行审计合并成准予发布、拒发或暂缓的业务决定。相同栅格可因分区约束不同形成不同发布结果；NoData 或输出篡改不会被放行。
 
 `trend-register` 固化两次运行、分区及变化预算，`trend-evaluate` 双边审计后逐格存储变化证据。均值未变但局部热点超限仍判恶化；改善、稳定、覆盖缺口和输出篡改各有不同结论。
+
+## 外业控制点登记
+
+`control-register --db DB --id SURVEY --source source.tif --observations fixtures/control-observations.json` 登记某份源栅格的合成外业控制点及目标 CRS，冻结原始观测摘要。`control-show --db DB --id SURVEY` 查看点和来源。登记只保全观测事实，尚不拟合几何校正或改变现有重投影输出。

@@ -1,0 +1,9 @@
+{
+  "target_crs": "EPSG:4326",
+  "points": [
+    {"id":"G-01","source_row":0.5,"source_col":0.5,"target_x":0.5,"target_y":3.5,"weight":1.0},
+    {"id":"G-02","source_row":0.5,"source_col":3.5,"target_x":3.5,"target_y":3.5,"weight":1.0},
+    {"id":"G-03","source_row":3.5,"source_col":0.5,"target_x":0.5,"target_y":0.5,"weight":1.0},
+    {"id":"G-04","source_row":3.5,"source_col":3.5,"target_x":3.5,"target_y":0.5,"weight":1.0}
+  ]
+}
