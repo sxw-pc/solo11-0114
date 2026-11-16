@@ -7,3 +7,5 @@
 本机已验证 `rasterio 1.5.2`、`numpy 2.5.3` 可在断网时用于运行。`python -m gridreproject demo` 生成合成二维 GeoTIFF，输出目标 GeoTIFF、SQLite 台账、JSON/Markdown 报告。测试包含 EPSG:4326 到 EPSG:3857 真正重投、NoData、类别与广延量、总量守恒、源外覆盖、来源/输出篡改。
 
 分区风险子系统用 `zone` 与 `zone_decision` 固化格集合、阈值和裁定；产品发布子系统用 `release_request` 保存范围与结论。发布同时复核来源及输出、读取分区决定：超限拒发，缺格或证据不足暂缓，完整且合规则准予发布。
+
+跨期变化子系统用 `trend` 冻结两次运行和变化预算，`trend_cell` 保留逐格基线、目标、覆盖率与热点证据。评估前重审两侧输出及契约一致性；平均值与热点比例分开裁定，覆盖缺口和篡改使比较不可用。

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import rasterio
 from rasterio.transform import from_bounds
-from gridreproject import engine,operations
+from gridreproject import engine,operations,trend
 from gridreproject.store import connect
 
 def run(tmp_path,data=None):
@@ -43,3 +43,32 @@ def test_zone_contract_is_immutable_and_invalid_cell_rejected(tmp_path):
     operations.register_zone(db,'outside',[[3,3]],1.0,5.0)
     with pytest.raises(ValueError,match='zone_cell_outside_grid'):
         operations.evaluate_zone(db,rid,'outside')
+
+def second_run(tmp_path,db,values,name):
+    src=tmp_path/f'{name}.tif'
+    with rasterio.open(src,'w',driver='GTiff',width=2,height=2,count=1,dtype='float64',
+                       crs='EPSG:4326',transform=from_bounds(0,0,2,2,2,2),nodata=-9999) as dst:
+        dst.write(np.array(values),1)
+    cfg={'crs':'EPSG:4326','bounds':[0,0,2,2],'width':2,'height':2,
+         'kind':'continuous','method':'bilinear','min_coverage':0.5}
+    return engine.run(db,src,cfg,tmp_path/f'{name}-out.tif')
+
+def test_spatial_trend_detects_hotspot_hidden_by_average(tmp_path):
+    db,baseline=run(tmp_path)
+    later=second_run(tmp_path,db,[[3.,0.],[3.,4.]],'later')
+    operations.register_zone(db,'whole',[[0,0],[0,1],[1,0],[1,1]],1.0,10.0)
+    trend.register(db,'quarter',baseline,later,'whole',1.0,1.0,0.0)
+    result=trend.evaluate(db,'quarter')
+    assert result['status']=='恶化' and result['hotspots']==1
+    assert connect(db).execute('SELECT count(*) FROM trend_cell WHERE trend_id=?',('quarter',)).fetchone()[0]==4
+    with pytest.raises(ValueError,match='trend_identity_conflict'):
+        trend.register(db,'quarter',later,baseline,'whole',1.0,1.0,0.0)
+
+def test_spatial_trend_improvement_and_tampered_source(tmp_path):
+    db,baseline=run(tmp_path)
+    later=second_run(tmp_path,db,[[-1.,0.],[1.,2.]],'later')
+    operations.register_zone(db,'whole',[[0,0],[0,1],[1,0],[1,1]],1.0,10.0)
+    trend.register(db,'quarter',baseline,later,'whole',1.0,1.0,0.0)
+    assert trend.evaluate(db,'quarter')['status']=='改善'
+    (tmp_path/'later-out.tif').write_bytes(b'tampered')
+    assert trend.evaluate(db,'quarter')['status']=='不可比较'
