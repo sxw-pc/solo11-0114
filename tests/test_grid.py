@@ -89,3 +89,50 @@ def test_extensive_audit_catches_wrong_total_even_with_updated_hash(tmp_path):
 
 def test_unknown_run_report_rejected(tmp_path):
     with pytest.raises(ValueError,match='unknown_run'):engine.report(tmp_path/'db',999,tmp_path/'r.json')
+
+
+def test_publish_failure_rolls_back_run_and_output(tmp_path,monkeypatch):
+    src=source(tmp_path);db_path=tmp_path/'db';out=tmp_path/'out.tif'
+    def fail_publish(*args):raise OSError('simulated_publish_failure')
+    monkeypatch.setattr(engine.os,'replace',fail_publish)
+    with pytest.raises(OSError,match='simulated_publish_failure'):
+        engine.run(db_path,src,cfg(),out)
+    from gridreproject.store import connect
+    db=connect(db_path)
+    assert db.execute('SELECT count(*) FROM run').fetchone()[0]==0
+    assert db.execute('SELECT count(*) FROM output').fetchone()[0]==0
+    assert not out.exists() and not out.with_suffix('.tmp.tif').exists()
+
+
+def test_audit_failure_changes_persisted_business_state(tmp_path):
+    db_path=tmp_path/'db';rid=engine.run(db_path,source(tmp_path),cfg(),tmp_path/'out.tif')
+    (tmp_path/'out.tif').write_bytes(b'corrupt')
+    data=json.loads(engine.report(db_path,rid,tmp_path/'r.json').read_text(encoding='utf-8'))
+    assert data['run']['status']=='失败'
+    assert 'output_hash' in data['audit']
+    assert any(x['code']=='audit_output_hash' for x in data['issues'])
+
+
+def test_extensive_amount_and_coverage_have_distinct_semantics(tmp_path):
+    contract=cfg(kind='extensive',method='area',width=1,height=1,min_coverage=1.0)
+    rid=engine.run(tmp_path/'db',source(tmp_path,[[1,-9999],[3,4]]),contract,tmp_path/'out.tif')
+    from gridreproject.store import connect
+    db=connect(tmp_path/'db')
+    row=db.execute('SELECT value,coverage FROM cell WHERE run_id=?',(rid,)).fetchone()
+    assert row['value'] is None
+    assert 0<row['coverage']<1
+    assert db.execute('SELECT status FROM run WHERE id=?',(rid,)).fetchone()[0]=='待核'
+
+
+def test_continuous_output_forgery_with_matching_hash_changes_verdict(tmp_path):
+    db_path=tmp_path/'db';out=tmp_path/'out.tif'
+    rid=engine.run(db_path,source(tmp_path),cfg(),out)
+    with rasterio.open(out) as src:profile=src.profile;data=src.read(1)
+    data[0,0]+=5
+    with rasterio.open(out,'w',**profile) as dst:dst.write(data,1)
+    from gridreproject.store import connect
+    with connect(db_path) as db:
+        db.execute('UPDATE output SET hash=? WHERE run_id=?',(engine.sha(out.read_bytes()),rid))
+    assert 'cell_mismatch' in engine.audit(db_path,rid)
+    with connect(db_path) as db:
+        assert db.execute('SELECT status FROM run WHERE id=?',(rid,)).fetchone()[0]=='失败'

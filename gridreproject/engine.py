@@ -51,7 +51,8 @@ def run(db_path,source_path,contract,out):
         values=np.where(valid,source,0.0);weight=valid.astype('float64')
         shape=(contract['height'],contract['width']);num=np.zeros(shape,dtype='float64');den=np.zeros(shape,dtype='float64')
         reproject(values,num,src_transform=src.transform,src_crs=src.crs,dst_transform=transform_out,dst_crs=contract['crs'],resampling=resampling,src_nodata=None,dst_nodata=-9999)
-        reproject(weight,den,src_transform=src.transform,src_crs=src.crs,dst_transform=transform_out,dst_crs=contract['crs'],resampling=resampling,src_nodata=None,dst_nodata=-9999)
+        coverage_resampling=Resampling.average if method=='area' else resampling
+        reproject(weight,den,src_transform=src.transform,src_crs=src.crs,dst_transform=transform_out,dst_crs=contract['crs'],resampling=coverage_resampling,src_nodata=None,dst_nodata=-9999)
         result=np.full(shape,-9999.0,dtype='float64');good=den>=contract['min_coverage'];good &= den>0
         result[good]=num[good] if method=='area' else num[good]/den[good]
         provenance=[]
@@ -64,15 +65,25 @@ def run(db_path,source_path,contract,out):
     out.parent.mkdir(parents=True,exist_ok=True);tmp=out.with_suffix('.tmp.tif')
     if out.exists():raise ValueError('output_exists')
     with rasterio.open(tmp,'w',**profile) as dst:dst.write(result,1)
-    os.replace(tmp,out)
-    with db:
-        rid=db.execute("INSERT INTO run(source_id,contract_id,status,method) VALUES (?,?,?,?)",(src_id,cid,'采样中',method)).lastrowid
-        db.executemany('INSERT INTO cell VALUES (?,?,?,?,?,?,?,?)',[(rid,*x) for x in provenance])
-        for r,c,value,cov,sr,sc,weight in provenance:
-            if value is None:db.execute('INSERT INTO issue(run_id,row,col,code,detail) VALUES (?,?,?,?,?)',(rid,r,c,'coverage_low',f'{cov:.3f}'))
-        db.execute('INSERT INTO output VALUES (?,?,?)',(rid,str(out),sha(out.read_bytes())))
-        db.execute("UPDATE run SET status=?,ended=CURRENT_TIMESTAMP WHERE id=?",('待核' if np.any(~good) else '已核验',rid))
-    db.close();return rid
+    published=False
+    try:
+        with db:
+            rid=db.execute("INSERT INTO run(source_id,contract_id,status,method) VALUES (?,?,?,?)",(src_id,cid,'采样中',method)).lastrowid
+            db.executemany('INSERT INTO cell VALUES (?,?,?,?,?,?,?,?)',[(rid,*x) for x in provenance])
+            for r,c,value,cov,sr,sc,weight in provenance:
+                if value is None:db.execute('INSERT INTO issue(run_id,row,col,code,detail) VALUES (?,?,?,?,?)',(rid,r,c,'coverage_low',f'{cov:.3f}'))
+            # The output is exposed only after the provenance rows are valid. An
+            # ordinary write/publish failure rolls the ledger back and removes it.
+            os.replace(tmp,out);published=True
+            db.execute('INSERT INTO output VALUES (?,?,?)',(rid,str(out),sha(out.read_bytes())))
+            db.execute("UPDATE run SET status=?,ended=CURRENT_TIMESTAMP WHERE id=?",('待核' if np.any(~good) else '已核验',rid))
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        if published:out.unlink(missing_ok=True)
+        raise
+    finally:db.close()
+    audit(db_path,rid)
+    return rid
 
 def audit(db_path,rid):
     db=connect(db_path);row=db.execute('SELECT o.path,o.hash,c.body,s.path AS source_path,s.hash AS source_hash FROM output o JOIN run r ON r.id=o.run_id JOIN contract c ON c.id=r.contract_id JOIN source s ON s.id=r.source_id WHERE o.run_id=?',(rid,)).fetchone()
@@ -84,7 +95,13 @@ def audit(db_path,rid):
     else:
         with rasterio.open(p) as src:
             if src.width!=contract['width'] or src.height!=contract['height'] or str(src.crs)!=str(rasterio.crs.CRS.from_string(contract['crs'])):issues.append('grid_mismatch')
+            if not np.allclose(tuple(src.bounds),tuple(contract['bounds']),rtol=0,atol=1e-8):issues.append('bounds_mismatch')
             data=src.read(1);finite=data[data!=src.nodata]
+            recorded=list(db.execute('SELECT row,col,value FROM cell WHERE run_id=?',(rid,)))
+            if len(recorded)!=data.size:issues.append('cell_evidence_missing')
+            elif any((r['value'] is None and data[r['row'],r['col']]!=src.nodata) or
+                     (r['value'] is not None and not np.isclose(data[r['row'],r['col']],r['value'],rtol=1e-9,atol=1e-9))
+                     for r in recorded):issues.append('cell_mismatch')
             if finite.size and not np.all(np.isfinite(finite)):issues.append('nonfinite')
             if contract['kind']=='extensive' and source_path.is_file() and 'source_hash' not in issues:
                 with rasterio.open(source_path) as origin:
@@ -92,13 +109,22 @@ def audit(db_path,rid):
                     valid=original!=origin.nodata if origin.nodata is not None else np.isfinite(original)
                     expected=float(original[valid].sum());actual=float(finite.sum())
                     if abs(actual-expected)>max(1e-6,abs(expected)*float(contract.get('total_tolerance',0.01))):issues.append('total_mismatch')
+    with db:
+        db.execute("DELETE FROM issue WHERE run_id=? AND code LIKE 'audit_%'",(rid,))
+        for code in issues:
+            db.execute('INSERT INTO issue(run_id,code,detail) VALUES (?,?,?)',
+                       (rid,'audit_'+code,'independent output verification'))
+        if issues:
+            state='失败' if any(x in issues for x in ('source_hash','output_hash','grid_mismatch','bounds_mismatch','cell_mismatch','cell_evidence_missing')) else '待核'
+            db.execute('UPDATE run SET status=? WHERE id=?',(state,rid))
     db.close();return issues
 
 def coverage(db_path,rid):
     db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close();return rows
 
 def report(db_path,rid,path):
+    findings=audit(db_path,rid)
     db=connect(db_path);run_row=db.execute('SELECT * FROM run WHERE id=?',(rid,)).fetchone()
     if not run_row:raise ValueError('unknown_run')
-    obj={'run':dict(run_row),'output':dict(db.execute('SELECT * FROM output WHERE run_id=?',(rid,)).fetchone()),'issues':[dict(x) for x in db.execute('SELECT row,col,code,detail FROM issue WHERE run_id=?',(rid,))],'audit':audit(db_path,rid),'cells':[dict(x) for x in db.execute('SELECT row,col,value,coverage,source_row,source_col FROM cell WHERE run_id=? ORDER BY row,col',(rid,))]}
+    obj={'run':dict(run_row),'output':dict(db.execute('SELECT * FROM output WHERE run_id=?',(rid,)).fetchone()),'issues':[dict(x) for x in db.execute('SELECT row,col,code,detail FROM issue WHERE run_id=?',(rid,))],'audit':findings,'cells':[dict(x) for x in db.execute('SELECT row,col,value,coverage,source_row,source_col FROM cell WHERE run_id=? ORDER BY row,col',(rid,))]}
     path=Path(path);path.write_text(json.dumps(obj,ensure_ascii=False,indent=2),encoding='utf-8');path.with_suffix('.md').write_text('# 栅格重投报告\n\n'+f"运行：{run_row['status']}，输出复核：{obj['audit']}\n",encoding='utf-8');db.close();return path
