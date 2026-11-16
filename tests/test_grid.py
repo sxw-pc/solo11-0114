@@ -64,3 +64,13 @@ def test_outside_coverage_never_valid(tmp_path):
     rid=engine.run(tmp_path/'db',source(tmp_path),cfg(bounds=[100,100,102,102]),tmp_path/'out.tif')
     from gridreproject.store import connect
     db=connect(tmp_path/'db');assert db.execute('SELECT status FROM run WHERE id=?',(rid,)).fetchone()[0]=='待核'
+
+def test_invalid_raster_rejected(tmp_path):
+    p=tmp_path/'bad.tif';p.write_bytes(b'not a raster')
+    with pytest.raises(Exception):engine.inspect(tmp_path/'db',p)
+
+def test_report_has_cell_coverage_and_audit(tmp_path):
+    rid=engine.run(tmp_path/'db',source(tmp_path),cfg(),tmp_path/'out.tif')
+    obj=json.loads(engine.report(tmp_path/'db',rid,tmp_path/'r.json').read_text(encoding='utf-8'))
+    assert len(obj['cells'])==4 and obj['audit']==[]
+    assert all('coverage' in cell for cell in obj['cells'])
