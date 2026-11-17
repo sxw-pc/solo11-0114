@@ -8,9 +8,11 @@ from . import engine,operations,trend
 def demo():
     root=Path(tempfile.mkdtemp(prefix='gridreproject-'));src=root/'input.tif'
     with rasterio.open(src,'w',driver='GTiff',width=2,height=2,count=1,dtype='float64',crs='EPSG:4326',transform=from_bounds(0,0,2,2,2,2),nodata=-9999) as dst:dst.write(np.array([[1.,2.],[3.,4.]]),1)
-    cfg={'crs':'EPSG:4326','bounds':[0,0,2,2],'width':2,'height':2,'kind':'continuous','method':'bilinear','min_coverage':1.0}
+    err=root/'error.tif'
+    with rasterio.open(err,'w',driver='GTiff',width=2,height=2,count=1,dtype='float64',crs='EPSG:4326',transform=from_bounds(0,0,2,2,2,2),nodata=-9999) as dst:dst.write(np.array([[0.1,0.1],[0.1,-9999]]),1)
+    cfg={'crs':'EPSG:4326','bounds':[0,0,2,2],'width':2,'height':2,'kind':'continuous','method':'bilinear','min_coverage':1.0,'error_model':{'version':'demo-1','error_grid':str(err)}}
     rid=engine.run(root/'ledger.db',src,cfg,root/'out.tif')
-    operations.register_zone(root/'ledger.db','demo-zone',[[0,0],[0,1]],1.0,10.0)
+    operations.register_zone(root/'ledger.db','demo-zone',[[0,0],[0,1]],1.0,10.0,strategy='mean_bound',strategy_version='1')
     print(operations.evaluate_zone(root/'ledger.db',rid,'demo-zone'))
     print(operations.decide_release(root/'ledger.db','demo-release',rid,['demo-zone']))
     later=root/'later.tif'
@@ -29,7 +31,7 @@ def main():
         if name=='run':s.add_argument('--out',required=True)
         if name in ('coverage','audit','report'):s.add_argument('--run-id',type=int,required=True)
         if name=='report':s.add_argument('--path',required=True)
-    s=sub.add_parser('zone-register');s.add_argument('--db',required=True);s.add_argument('--name',required=True);s.add_argument('--cells',required=True);s.add_argument('--min-coverage',type=float,required=True);s.add_argument('--limit',type=float,required=True)
+    s=sub.add_parser('zone-register');s.add_argument('--db',required=True);s.add_argument('--name',required=True);s.add_argument('--cells',required=True);s.add_argument('--min-coverage',type=float,required=True);s.add_argument('--limit',type=float,required=True);s.add_argument('--strategy',choices=['mean_bound','hotspot_bound']);s.add_argument('--strategy-version',default='1')
     s=sub.add_parser('zone-evaluate');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--name',required=True)
     s=sub.add_parser('release');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--request-id',required=True);s.add_argument('--zones',required=True)
     s=sub.add_parser('trend-register');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--baseline-run',type=int,required=True);s.add_argument('--target-run',type=int,required=True);s.add_argument('--zone',required=True);s.add_argument('--max-mean',type=float,required=True);s.add_argument('--max-cell',type=float,required=True);s.add_argument('--max-hotspot-fraction',type=float,required=True)
@@ -43,7 +45,7 @@ def main():
         with rasterio.open(x.source) as src:
             c=json.loads(Path(x.contract).read_text());print(engine.map_cell(src,from_bounds(*c['bounds'],c['width'],c['height']),c['crs'],x.row,x.col))
     elif x.cmd=='run':print(engine.run(x.db,x.source,json.loads(Path(x.contract).read_text()),x.out))
-    elif x.cmd=='zone-register':operations.register_zone(x.db,x.name,json.loads(Path(x.cells).read_text()),x.min_coverage,x.limit)
+    elif x.cmd=='zone-register':operations.register_zone(x.db,x.name,json.loads(Path(x.cells).read_text()),x.min_coverage,x.limit,strategy=x.strategy,strategy_version=x.strategy_version if x.strategy else None)
     elif x.cmd=='zone-evaluate':print(operations.evaluate_zone(x.db,x.run_id,x.name))
     elif x.cmd=='release':print(operations.decide_release(x.db,x.request_id,x.run_id,x.zones.split(',')))
     elif x.cmd=='trend-register':trend.register(x.db,x.id,x.baseline_run,x.target_run,x.zone,x.max_mean,x.max_cell,x.max_hotspot_fraction)
