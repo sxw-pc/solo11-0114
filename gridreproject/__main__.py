@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
-from . import engine,operations,trend
+from . import engine,mosaic,operations,trend
 
 def demo():
     root=Path(tempfile.mkdtemp(prefix='gridreproject-'));src=root/'input.tif'
@@ -34,6 +34,12 @@ def main():
     s=sub.add_parser('release');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--request-id',required=True);s.add_argument('--zones',required=True)
     s=sub.add_parser('trend-register');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--baseline-run',type=int,required=True);s.add_argument('--target-run',type=int,required=True);s.add_argument('--zone',required=True);s.add_argument('--max-mean',type=float,required=True);s.add_argument('--max-cell',type=float,required=True);s.add_argument('--max-hotspot-fraction',type=float,required=True)
     s=sub.add_parser('trend-evaluate');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
+    for name in ('mosaic-plan','mosaic-run','mosaic-audit','mosaic-report'):
+        s=sub.add_parser(name);s.add_argument('--db',required=True)
+        if name in ('mosaic-plan','mosaic-run'):s.add_argument('--contract',required=True)
+        if name=='mosaic-run':s.add_argument('--out',required=True)
+        if name in ('mosaic-audit','mosaic-report'):s.add_argument('--run-id',type=int,required=True)
+        if name=='mosaic-report':s.add_argument('--path',required=True)
     x=p.parse_args()
     if x.cmd=='demo':demo()
     elif x.cmd=='inspect':print(engine.inspect(x.db,x.source))
@@ -48,6 +54,10 @@ def main():
     elif x.cmd=='release':print(operations.decide_release(x.db,x.request_id,x.run_id,x.zones.split(',')))
     elif x.cmd=='trend-register':trend.register(x.db,x.id,x.baseline_run,x.target_run,x.zone,x.max_mean,x.max_cell,x.max_hotspot_fraction)
     elif x.cmd=='trend-evaluate':print(trend.evaluate(x.db,x.id))
+    elif x.cmd=='mosaic-plan':print(mosaic.freeze(x.db,json.loads(Path(x.contract).read_text())))
+    elif x.cmd=='mosaic-run':print(mosaic.run(x.db,json.loads(Path(x.contract).read_text()),x.out))
+    elif x.cmd=='mosaic-audit':print(mosaic.audit(x.db,x.run_id))
+    elif x.cmd=='mosaic-report':print(mosaic.report(x.db,x.run_id,x.path))
     elif x.cmd=='coverage':print(engine.coverage(x.db,x.run_id))
     elif x.cmd=='audit':print(engine.audit(x.db,x.run_id))
     else:print(engine.report(x.db,x.run_id,x.path))

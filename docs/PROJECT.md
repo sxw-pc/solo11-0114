@@ -9,3 +9,5 @@
 分区风险子系统用 `zone` 与 `zone_decision` 固化格集合、阈值和裁定；产品发布子系统用 `release_request` 保存范围与结论。发布同时复核来源及输出、读取分区决定：超限拒发，缺格或证据不足暂缓，完整且合规则准予发布。
 
 跨期变化子系统用 `trend` 冻结两次运行和变化预算，`trend_cell` 保留逐格基线、目标、覆盖率与热点证据。评估前重审两侧输出及契约一致性；平均值与热点比例分开裁定，覆盖缺口和篡改使比较不可用。
+
+多源拼接子系统用 `mosaic` 冻结契约体（目标网格、变量语义、min_coverage、overlap_policy 与有序源及其字节哈希、地理元数据），`mosaic_source` 按位置镜像登记；契约哈希即运行身份，策略、顺序、门槛或来源内容变化都会改变它。`mosaic_run`、`mosaic_cell`、`mosaic_contrib` 持久化逐格决定（gap/single/overlap）与逐源覆盖、候选、权重和逆映射坐标；`mosaic_output` 保存输出摘要。priority 取契约顺序首个覆盖达标源，quality_weighted 只对连续量按有效覆盖归一加权；类别量与广延量用 quality_weighted 会在契约期被 `policy_kind_conflict` 拒绝。独立复核重读全部来源、重算贡献关系并比对输出与证据，来源、输出或贡献证据被篡改都会把运行降为失败；发布与证据提交在同一事务，失败回滚且不触碰已核验的单源输出。
