@@ -1,0 +1,1 @@
+[{"id":"tower-west","x":0.5,"y":0.5,"antenna_m":5,"max_range_m":10,"min_clearance_m":1},{"id":"tower-east","x":1.5,"y":0.5,"antenna_m":5,"max_range_m":10,"min_clearance_m":1}]
