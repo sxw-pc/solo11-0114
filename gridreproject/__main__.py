@@ -34,6 +34,8 @@ def main():
     s=sub.add_parser('release');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--request-id',required=True);s.add_argument('--zones',required=True)
     s=sub.add_parser('trend-register');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--baseline-run',type=int,required=True);s.add_argument('--target-run',type=int,required=True);s.add_argument('--zone',required=True);s.add_argument('--max-mean',type=float,required=True);s.add_argument('--max-cell',type=float,required=True);s.add_argument('--max-hotspot-fraction',type=float,required=True)
     s=sub.add_parser('trend-evaluate');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
+    s=sub.add_parser('vector-demo');s.add_argument('--db',required=True);s.add_argument('--workdir',required=True);s.add_argument('--fixture',required=True)
+    s=sub.add_parser('vector-inspect');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
     x=p.parse_args()
     if x.cmd=='demo':demo()
     elif x.cmd=='inspect':print(engine.inspect(x.db,x.source))
@@ -48,6 +50,12 @@ def main():
     elif x.cmd=='release':print(operations.decide_release(x.db,x.request_id,x.run_id,x.zones.split(',')))
     elif x.cmd=='trend-register':trend.register(x.db,x.id,x.baseline_run,x.target_run,x.zone,x.max_mean,x.max_cell,x.max_hotspot_fraction)
     elif x.cmd=='trend-evaluate':print(trend.evaluate(x.db,x.id))
+    elif x.cmd=='vector-demo':
+        from . import vector
+        print(vector.demo(x.db,x.workdir,x.fixture))
+    elif x.cmd=='vector-inspect':
+        from . import vector
+        print(vector.inspect(x.db,x.id))
     elif x.cmd=='coverage':print(engine.coverage(x.db,x.run_id))
     elif x.cmd=='audit':print(engine.audit(x.db,x.run_id))
     else:print(engine.report(x.db,x.run_id,x.path))

@@ -1,5 +1,7 @@
 # 栅格重投台
 
+增强素材副本新增离线双分量向量源登记：`python -m gridreproject vector-demo --db <DB> --workdir <空目录> --fixture fixtures/vector-pair.json` 写入合成 U/V 栅格并冻结两份字节摘要、共同网格和分量基准；`vector-inspect --db <DB> --id synthetic-current-01` 可重新核实。该流程只登记来源，不改变原有标量重投影、分区发布或趋势判断。
+
 离线单波段栅格重投影与覆盖审计。源登记、目标网格契约、逆映射、变量语义采样、缺测传播、覆盖诊断、输出再验和溯源报告构成完整流水线。运行期使用已安装 rasterio 1.5.2 与 numpy 2.5.3；`python -c "import rasterio,numpy; from rasterio.warp import transform"` 可自检。
 
 运行：`python -m pip install . --no-deps --no-build-isolation`，`python -m gridreproject demo`，`python -m gridreproject --help`，`python -m pytest -q`。运行与测试使用本地合成数据，不访问网络。
