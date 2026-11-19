@@ -122,6 +122,16 @@ def audit(db_path,rid):
 def coverage(db_path,rid):
     db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close();return rows
 
+def trusted(db_path,rid):
+    # Re-verify source and output before any downstream evidence is chained.
+    try:return audit(db_path,rid)==[]
+    except ValueError:return False
+
+def cell_area(contract):
+    # Ground area of one target cell in square CRS units of the frozen grid.
+    x0,y0,x1,y1=contract['bounds']
+    return abs((x1-x0)*(y1-y0))/float(contract['width']*contract['height'])
+
 def report(db_path,rid,path):
     findings=audit(db_path,rid)
     db=connect(db_path);run_row=db.execute('SELECT * FROM run WHERE id=?',(rid,)).fetchone()

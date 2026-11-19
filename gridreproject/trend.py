@@ -1,7 +1,12 @@
 """Compare audited spatial runs using both average change and local hot spots."""
 import json
 from .store import connect
-from .engine import audit
+from .engine import audit, trusted, coverage, cell_area, sha
+
+MIN_SERIES_RUNS = 3
+MAX_SERIES_RUNS = 12
+MIN_EVENT_OCCURRENCES = 3
+PERSISTENCE_MODES = ('consecutive', 'cumulative')
 
 
 def register(path, trend_id, baseline_run, target_run, zone_id, max_mean_increase,
