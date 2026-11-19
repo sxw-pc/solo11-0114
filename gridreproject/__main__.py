@@ -36,6 +36,11 @@ def main():
     s=sub.add_parser('trend-evaluate');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
     s=sub.add_parser('vector-demo');s.add_argument('--db',required=True);s.add_argument('--workdir',required=True);s.add_argument('--fixture',required=True)
     s=sub.add_parser('vector-inspect');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
+    s=sub.add_parser('vector-plan');s.add_argument('--db',required=True);s.add_argument('--contract',required=True)
+    s=sub.add_parser('vector-run');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--contract',required=True);s.add_argument('--out',required=True)
+    s=sub.add_parser('vector-audit');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True)
+    s=sub.add_parser('vector-east');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True)
+    s=sub.add_parser('vector-report');s.add_argument('--db',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--path',required=True)
     x=p.parse_args()
     if x.cmd=='demo':demo()
     elif x.cmd=='inspect':print(engine.inspect(x.db,x.source))
@@ -56,6 +61,21 @@ def main():
     elif x.cmd=='vector-inspect':
         from . import vector
         print(vector.inspect(x.db,x.id))
+    elif x.cmd=='vector-plan':
+        from . import vectorrun
+        print(vectorrun.plan(x.db,json.loads(Path(x.contract).read_text())))
+    elif x.cmd=='vector-run':
+        from . import vectorrun
+        print(vectorrun.run(x.db,x.id,json.loads(Path(x.contract).read_text()),x.out))
+    elif x.cmd=='vector-audit':
+        from . import vectorrun
+        print(vectorrun.audit(x.db,x.run_id))
+    elif x.cmd=='vector-east':
+        from . import vectorrun
+        print(json.dumps(vectorrun.decide_east(x.db,x.run_id),ensure_ascii=False))
+    elif x.cmd=='vector-report':
+        from . import vectorrun
+        print(vectorrun.report(x.db,x.run_id,x.path))
     elif x.cmd=='coverage':print(engine.coverage(x.db,x.run_id))
     elif x.cmd=='audit':print(engine.audit(x.db,x.run_id))
     else:print(engine.report(x.db,x.run_id,x.path))
