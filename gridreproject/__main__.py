@@ -36,6 +36,7 @@ def main():
     s=sub.add_parser('trend-evaluate');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
     s=sub.add_parser('corridor-register');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--run-id',type=int,required=True);s.add_argument('--start',required=True);s.add_argument('--goal',required=True);s.add_argument('--max-cost',type=float,required=True);s.add_argument('--failure-groups',default='[]')
     s=sub.add_parser('corridor-search');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
+    s=sub.add_parser('corridor-assess');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--policy',required=True,choices=('single_fast','survivable_pair'))
     x=p.parse_args()
     if x.cmd=='demo':demo()
     elif x.cmd=='inspect':print(engine.inspect(x.db,x.source))
@@ -56,6 +57,9 @@ def main():
     elif x.cmd=='corridor-search':
         from .corridor import search
         print(search(x.db,x.id))
+    elif x.cmd=='corridor-assess':
+        from .corridor import corridor_assessment
+        print(corridor_assessment(x.db,x.id,x.policy))
     elif x.cmd=='coverage':print(engine.coverage(x.db,x.run_id))
     elif x.cmd=='audit':print(engine.audit(x.db,x.run_id))
     else:print(engine.report(x.db,x.run_id,x.path))
