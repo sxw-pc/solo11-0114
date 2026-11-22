@@ -26,7 +26,12 @@ def main():
         if name in ('inspect','run','map'):s.add_argument('--source',required=True)
         if name in ('plan','run','map'):s.add_argument('--contract',required=True)
         if name=='map':s.add_argument('--row',type=int,required=True);s.add_argument('--col',type=int,required=True)
-        if name=='run':s.add_argument('--out',required=True)
+        if name=='run':
+            s.add_argument('--out',required=True)
+            s.add_argument('--survey-id')
+            s.add_argument('--correction-model',choices=('global_affine','local_mesh'))
+            s.add_argument('--control-residual-limit',type=float)
+            s.add_argument('--mesh-boundary-policy',default='reject',choices=('reject',))
         if name in ('coverage','audit','report'):s.add_argument('--run-id',type=int,required=True)
         if name=='report':s.add_argument('--path',required=True)
     s=sub.add_parser('zone-register');s.add_argument('--db',required=True);s.add_argument('--name',required=True);s.add_argument('--cells',required=True);s.add_argument('--min-coverage',type=float,required=True);s.add_argument('--limit',type=float,required=True)
@@ -44,7 +49,15 @@ def main():
         from rasterio.transform import from_bounds
         with rasterio.open(x.source) as src:
             c=json.loads(Path(x.contract).read_text());print(engine.map_cell(src,from_bounds(*c['bounds'],c['width'],c['height']),c['crs'],x.row,x.col))
-    elif x.cmd=='run':print(engine.run(x.db,x.source,json.loads(Path(x.contract).read_text()),x.out))
+    elif x.cmd=='run':
+        contract=json.loads(Path(x.contract).read_text())
+        if x.survey_id:
+            if not x.correction_model or x.control_residual_limit is None:
+                raise SystemExit('correction requires --correction-model and --control-residual-limit')
+            contract.update(survey_id=x.survey_id,correction_model=x.correction_model,
+                            control_residual_limit=x.control_residual_limit,
+                            mesh_boundary_policy=x.mesh_boundary_policy)
+        print(engine.run(x.db,x.source,contract,x.out))
     elif x.cmd=='zone-register':operations.register_zone(x.db,x.name,json.loads(Path(x.cells).read_text()),x.min_coverage,x.limit)
     elif x.cmd=='zone-evaluate':print(operations.evaluate_zone(x.db,x.run_id,x.name))
     elif x.cmd=='release':print(operations.decide_release(x.db,x.request_id,x.run_id,x.zones.split(',')))

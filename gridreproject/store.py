@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS trend(id TEXT PRIMARY KEY,baseline_run INT NOT NULL R
 CREATE TABLE IF NOT EXISTS trend_cell(trend_id TEXT NOT NULL REFERENCES trend(id),row INT NOT NULL,col INT NOT NULL,baseline REAL,target REAL,delta REAL,coverage REAL NOT NULL,hotspot INT NOT NULL,PRIMARY KEY(trend_id,row,col));
 CREATE TABLE IF NOT EXISTS control_survey(id TEXT PRIMARY KEY,source_hash TEXT NOT NULL,target_crs TEXT NOT NULL,digest TEXT NOT NULL,raw TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS control_point(survey_id TEXT NOT NULL REFERENCES control_survey(id),point_id TEXT NOT NULL,source_row REAL NOT NULL,source_col REAL NOT NULL,target_x REAL NOT NULL,target_y REAL NOT NULL,weight REAL NOT NULL,PRIMARY KEY(survey_id,point_id));
+CREATE TABLE IF NOT EXISTS control_fit(id INTEGER PRIMARY KEY,run_id INT REFERENCES run(id),survey_id TEXT NOT NULL,model TEXT NOT NULL,residual_limit REAL NOT NULL,boundary_policy TEXT NOT NULL,observation_digest TEXT NOT NULL,coef TEXT NOT NULL,status TEXT NOT NULL,error_code TEXT,error_detail TEXT,created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS control_fit_point(fit_id INT NOT NULL REFERENCES control_fit(id),point_id TEXT NOT NULL,predicted_x REAL,predicted_y REAL,residual REAL,weight REAL NOT NULL,accepted INT NOT NULL,reject_reason TEXT,PRIMARY KEY(fit_id,point_id));
+CREATE TABLE IF NOT EXISTS cell_basis(run_id INT NOT NULL REFERENCES run(id),row INT NOT NULL,col INT NOT NULL,status TEXT NOT NULL,target_x REAL,target_y REAL,source_row REAL,source_col REAL,basis TEXT NOT NULL,reason TEXT,PRIMARY KEY(run_id,row,col));
 """
 def connect(path):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True);db=sqlite3.connect(p);db.row_factory=sqlite3.Row;db.executescript(SCHEMA);return db
