@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import numpy as np
@@ -121,6 +122,26 @@ def audit(db_path,rid):
 
 def coverage(db_path,rid):
     db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close();return rows
+
+def cell_ground_areas(contract):
+    # Ground area of every target cell in square metres. Geographic grids use a
+    # spherical strip formula per row; projected grids use pixel size scaled by
+    # the CRS linear unit. Deterministic and offline.
+    w=int(contract['width']);h=int(contract['height'])
+    x0,y0,x1,y1=(float(v) for v in contract['bounds'])
+    crs=rasterio.crs.CRS.from_string(contract['crs'])
+    dx=(x1-x0)/w;dy=(y1-y0)/h
+    areas=np.zeros((h,w),dtype='float64')
+    if crs.is_geographic:
+        radius=6371008.8;dlon=math.radians(abs(dx))
+        for r in range(h):
+            north=math.radians(y1-r*dy);south=math.radians(y1-(r+1)*dy)
+            areas[r,:]=radius*radius*dlon*abs(math.sin(north)-math.sin(south))
+    else:
+        try:factor=float(crs.linear_units_factor[1])
+        except Exception:factor=1.0
+        areas[:,:]=abs(dx*dy)*factor*factor
+    return areas
 
 def report(db_path,rid,path):
     findings=audit(db_path,rid)

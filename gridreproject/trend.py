@@ -1,7 +1,7 @@
 """Compare audited spatial runs using both average change and local hot spots."""
 import json
 from .store import connect
-from .engine import audit
+from .engine import audit, cell_ground_areas
 
 
 def register(path, trend_id, baseline_run, target_run, zone_id, max_mean_increase,
