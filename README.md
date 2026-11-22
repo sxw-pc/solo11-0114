@@ -16,4 +16,4 @@
 
 `trend-register` 固化两次运行、分区及变化预算，`trend-evaluate` 双边审计后逐格存储变化证据。均值未变但局部热点超限仍判恶化；改善、稳定、覆盖缺口和输出篡改各有不同结论。
 
-`corridor-register` 冻结栅格通道端点、成本预算与共同失效格组；`corridor-search` 当前只在已审计连续栅格上求单条最低成本四邻接路径，尚不评估双路径冗余或共同失效组。
+`corridor-register` 冻结栅格通道端点、成本预算与共同失效格组；`corridor-search` 在已审计连续栅格上求单条最低成本四邻接路径并写入 `corridor_result`。`corridor-assess` 独立评估 `single_fast` 与 `survivable_pair` 政策：正值有限且覆盖达标的格是已知可走，非正值是确定障碍，缺测、覆盖不足或证据不一致的格是未知——不当零成本捷径，也不当确定障碍。已知图给出 viable 见证（路线、成本、逐格覆盖、每组故障交集）；未知格按零成本乐观可通的上界图只用于证明 blocked；两者之间为 indeterminate 并指出决定性未知格。审计失败或成本网格不可解释时绝不给 viable。结论随运行、合同、来源与输出摘要及逐格证据指纹冻结于 `corridor_assessment`，重复评估幂等，栅格或证据篡改后不复用旧结论，且不改写 `corridor_result`。
