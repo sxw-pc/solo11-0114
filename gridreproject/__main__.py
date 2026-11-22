@@ -36,6 +36,9 @@ def main():
     s=sub.add_parser('trend-evaluate');s.add_argument('--db',required=True);s.add_argument('--id',required=True)
     s=sub.add_parser('archive-request');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--run-ids',required=True);s.add_argument('--policy',required=True,choices=['product_only','full_replay'])
     s=sub.add_parser('archive-export');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--directory',required=True)
+    s=sub.add_parser('archive-publish');s.add_argument('--db',required=True);s.add_argument('--id',required=True);s.add_argument('--archive-root',required=True);s.add_argument('--byte-budget',type=int,required=True)
+    s=sub.add_parser('archive-verify');s.add_argument('--bundle',required=True)
+    s=sub.add_parser('archive-restore');s.add_argument('--bundle',required=True);s.add_argument('--fresh-db',required=True);s.add_argument('--fresh-files',required=True)
     x=p.parse_args()
     if x.cmd=='demo':demo()
     elif x.cmd=='inspect':print(engine.inspect(x.db,x.source))
@@ -56,6 +59,15 @@ def main():
     elif x.cmd=='archive-export':
         from .archive import export
         print(export(x.db,x.id,x.directory))
+    elif x.cmd=='archive-publish':
+        from .archive import publish
+        print(json.dumps(publish(x.id,x.archive_root,x.byte_budget,db_path=x.db),ensure_ascii=False,sort_keys=True))
+    elif x.cmd=='archive-verify':
+        from .archive import verify_bundle
+        print(json.dumps(verify_bundle(x.bundle),ensure_ascii=False,sort_keys=True))
+    elif x.cmd=='archive-restore':
+        from .archive import restore
+        print(json.dumps(restore(x.bundle,x.fresh_db,x.fresh_files),ensure_ascii=False,sort_keys=True))
     elif x.cmd=='coverage':print(engine.coverage(x.db,x.run_id))
     elif x.cmd=='audit':print(engine.audit(x.db,x.run_id))
     else:print(engine.report(x.db,x.run_id,x.path))

@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 SCHEMA="""
 PRAGMA foreign_keys=ON;
@@ -16,3 +17,23 @@ CREATE TABLE IF NOT EXISTS trend_cell(trend_id TEXT NOT NULL REFERENCES trend(id
 """
 def connect(path):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True);db=sqlite3.connect(p);db.row_factory=sqlite3.Row;db.executescript(SCHEMA);return db
+
+@contextmanager
+def frozen_view(path):
+    """Yield a connection holding a read-only snapshot of the whole ledger.
+
+    ``BEGIN IMMEDIATE`` takes the write lock up front, and SQLite's default
+    ``deferred``/``rollback journal`` isolation makes every read inside the
+    transaction see one consistent version of every table (including
+    source/contract/run/cell/issue/output). Old cell rows and a replaced
+    output file therefore cannot be stitched together into a forged bundle.
+    The lock is always released, even when the caller rolls back.
+    """
+    db=connect(path)
+    db.execute('PRAGMA busy_timeout=5000')
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        yield db
+    finally:
+        db.rollback()
+        db.close()

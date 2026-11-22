@@ -85,8 +85,13 @@ def run(db_path,source_path,contract,out):
     audit(db_path,rid)
     return rid
 
-def audit(db_path,rid):
-    db=connect(db_path);row=db.execute('SELECT o.path,o.hash,c.body,s.path AS source_path,s.hash AS source_hash FROM output o JOIN run r ON r.id=o.run_id JOIN contract c ON c.id=r.contract_id JOIN source s ON s.id=r.source_id WHERE o.run_id=?',(rid,)).fetchone()
+def audit_snapshot(db,rid):
+    """Read-only independent verification on an existing connection.
+
+    No writes are issued, so callers may run it inside a frozen transaction
+    (for example while sealing an archive) without mutating the ledger.
+    """
+    row=db.execute('SELECT o.path,o.hash,c.body,s.path AS source_path,s.hash AS source_hash FROM output o JOIN run r ON r.id=o.run_id JOIN contract c ON c.id=r.contract_id JOIN source s ON s.id=r.source_id WHERE o.run_id=?',(rid,)).fetchone()
     if not row:raise ValueError('unknown_run')
     p=Path(row['path']);contract=json.loads(row['body']);issues=[]
     source_path=Path(row['source_path'])
@@ -109,15 +114,23 @@ def audit(db_path,rid):
                     valid=original!=origin.nodata if origin.nodata is not None else np.isfinite(original)
                     expected=float(original[valid].sum());actual=float(finite.sum())
                     if abs(actual-expected)>max(1e-6,abs(expected)*float(contract.get('total_tolerance',0.01))):issues.append('total_mismatch')
-    with db:
-        db.execute("DELETE FROM issue WHERE run_id=? AND code LIKE 'audit_%'",(rid,))
-        for code in issues:
-            db.execute('INSERT INTO issue(run_id,code,detail) VALUES (?,?,?)',
-                       (rid,'audit_'+code,'independent output verification'))
-        if issues:
-            state='失败' if any(x in issues for x in ('source_hash','output_hash','grid_mismatch','bounds_mismatch','cell_mismatch','cell_evidence_missing')) else '待核'
-            db.execute('UPDATE run SET status=? WHERE id=?',(state,rid))
-    db.close();return issues
+    return issues
+
+def audit(db_path,rid):
+    db=connect(db_path)
+    try:
+        issues=audit_snapshot(db,rid)
+        with db:
+            db.execute("DELETE FROM issue WHERE run_id=? AND code LIKE 'audit_%'",(rid,))
+            for code in issues:
+                db.execute('INSERT INTO issue(run_id,code,detail) VALUES (?,?,?)',
+                           (rid,'audit_'+code,'independent output verification'))
+            if issues:
+                state='失败' if any(x in issues for x in ('source_hash','output_hash','grid_mismatch','bounds_mismatch','cell_mismatch','cell_evidence_missing')) else '待核'
+                db.execute('UPDATE run SET status=? WHERE id=?',(state,rid))
+        return issues
+    finally:
+        db.close()
 
 def coverage(db_path,rid):
     db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close();return rows

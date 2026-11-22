@@ -16,4 +16,10 @@
 
 `trend-register` 固化两次运行、分区及变化预算，`trend-evaluate` 双边审计后逐格存储变化证据。均值未变但局部热点超限仍判恶化；改善、稳定、覆盖缺口和输出篡改各有不同结论。
 
-`archive-request` 冻结一组运行及 product_only/full_replay 用途，`archive-export` 当前逐运行复制输出文件与可选源文件并写清单；尚未保存完整数据库证据、提供恢复或处理跨运行去重与中断。
+`archive-request` 冻结一组运行及 product_only/full_replay 用途。旧 `archive-export` 保留原逐运行复制语义与已确认运行、发布记录不变；新 `archive-publish` 以内容哈希为对象身份生成去重、原子封存的离线包，`archive-verify` 离线核验，`archive-restore` 在全新目录与 SQLite 库中恢复。
+
+## 内容寻址封存与诚实恢复
+
+`publish(request_id, archive_root, byte_budget)` 在私有临时区组装封存包：所选 run 的输出/源 TIFF、合同正文、源元数据以及 run 与全部 cell/issue 证据构成闭合清单，多个 run 共用同一源哈希时源字节只存一份、引用各自独立。复制期间逐对象重新计算哈希，audit 后被替换的源路径会以 `object_changed_after_audit` 拒绝；数据库读取在 `BEGIN IMMEDIATE` 冻结视图内完成，旧 cell 行与新输出文件无法拼成伪完整包。预算只统计实际新写入的唯一对象字节与清单开销，重复来源不按 run 重复计费；预算不足只给 `byte_budget_exceeded` 诊断，绝不发布缺对象的包。所有对象、引用、清单与离线验证通过后才一次性 `os.replace` 公布，同请求同预算重试幂等且不覆盖已签包，失败清理临时物。
+
+两种用途的恢复保证不同且明确标注：`product_only` 包标为 `display_only`，原文件消失后仍可恢复可打开、网格/边界/哈希符合清单的输出 TIFF，但不声称重新验真源与 cell 语义；`full_replay` 包独立于原数据库与原路径，在全新目录和 SQLite 库中重建 source/contract/run/cell/output 引用链，再调用现有 `audit` 达到与归档时相同的已核验状态。恢复产生新路径与 ID 映射，绝不更新原库 `source.path` 或覆盖现有输出。清单、共享源对象、单格 cell 或恢复后 GeoTIFF 被删改时，离线 `verify_bundle`/`restore` 逐对象重算哈希并拒绝对应保证，不接受 manifest 自报的总摘要。
