@@ -1,7 +1,17 @@
-"""Compare audited spatial runs using both average change and local hot spots."""
+"""Compare audited spatial runs using both average change and local hot spots.
+
+The two-run entry (register/evaluate) is the linked baseline. The multi-period
+entry (register_events/evaluate_events/event_snapshots) identifies deterioration
+events across three to twelve verified runs whose order is frozen at intake.
+Adjacent periods are compared cell by cell under zone-valid coverage; local
+increments over the budget become deteriorating cells, 4-neighbourhood patches
+are linked across periods only by actual overlap, and a period that fails audit
+or loses credible coverage breaks the evidence chain instead of being skipped.
+"""
+import hashlib
 import json
 from .store import connect
-from .engine import audit
+from .engine import audit, trusted, coverage
 
 
 def register(path, trend_id, baseline_run, target_run, zone_id, max_mean_increase,

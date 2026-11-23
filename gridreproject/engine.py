@@ -119,8 +119,17 @@ def audit(db_path,rid):
             db.execute('UPDATE run SET status=? WHERE id=?',(state,rid))
     db.close();return issues
 
-def coverage(db_path,rid):
-    db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close();return rows
+def coverage(db_path,rid,min_coverage=None):
+    db=connect(db_path);rows=[dict(x) for x in db.execute('SELECT row,col,value,coverage FROM cell WHERE run_id=? ORDER BY row,col',(rid,))];db.close()
+    if min_coverage is not None:
+        for r in rows:r['valid']=bool(r['value'] is not None and r['coverage']>=min_coverage)
+    return rows
+
+def trusted(db_path,rid):
+    """Re-audit the run and report whether it is currently verified."""
+    audit(db_path,rid)
+    db=connect(db_path);row=db.execute('SELECT status FROM run WHERE id=?',(rid,)).fetchone();db.close()
+    return bool(row) and row['status']=='已核验'
 
 def report(db_path,rid,path):
     findings=audit(db_path,rid)
